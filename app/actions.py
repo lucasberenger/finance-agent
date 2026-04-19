@@ -1,5 +1,5 @@
 from app.sheets import income_sheet, outcome_sheet
-from app.utils import format_label
+from app.utils import format_label, get_current_date
 
 def add_expense(
         date_str: str,
@@ -52,7 +52,7 @@ def handle_action(data: dict):
 
     if action == "add_expense":
         return add_expense(
-            date_str=data.get("date"),
+            date_str=get_current_date(),
             description=data.get("description", None),
             category=data.get("category"),
             amount=data.get("amount"),
@@ -61,7 +61,7 @@ def handle_action(data: dict):
     
     elif action == "add_income":
         return add_income(
-            date_str=data.get("date"),
+            date_str=get_current_date(),
             description=data.get("description", None),
             source=data.get("source"),
             amount=data.get("amount")

@@ -27,7 +27,6 @@ RULES:
 - if action is add_expense:
 {
   "action": "add_expense",
-  "date": string,
   "description": string,
   "category": string,
   "amount": number,
@@ -37,7 +36,6 @@ RULES:
 - if action is add_income:
 {
   "action": "add_income",
-  "date": string,
   "description": string,
   "source": string,
   "amount": number
@@ -45,8 +43,8 @@ RULES:
 
 ------------------------
 2. DATE:
-- Use ISO format: DD/MM/YYYY
-- If not provided, use today's date
+- The system will handle the date.
+- DO NOT include "date" in the output.
 
 ------------------------
 3. AMOUNT:
@@ -81,7 +79,7 @@ RULES:
 - pix
 - boleto
 
-- If not mentioned, use: "dinheiro"
+- If not mentioned, use: "débito"
 
 ------------------------
 8. ACTION RULES:
@@ -92,8 +90,8 @@ RULES:
 ------------------------
 9. MISSING DATA:
 
-- If date is missing → use today's date
-- If payment_method is missing → use "dinheiro"
+- DO NOT generate or assume a date
+- If payment_method is missing → use "débito"
 - If category is unclear → use "lazer"
 - If source is unclear → use "freela"
 
@@ -107,18 +105,16 @@ Input: "Gastei 30 reais com comida hoje"
 Output:
 {
   "action": "add_expense",
-  "date": "2026-04-14",
   "description": "comida",
   "category": "lanche",
   "amount": 30,
-  "payment_method": "dinheiro"
+  "payment_method": "débito"
 }
 
 Input: "Paguei 120 de aluguel no crédito"
 Output:
 {
   "action": "add_expense",
-  "date": "2026-04-14",
   "description": "aluguel",
   "category": "moradia",
   "amount": 120,
@@ -129,7 +125,6 @@ Input: "Recebi 1000 reais hoje de um cliente"
 Output:
 {
   "action": "add_income",
-  "date": "2026-04-14",
   "description": "cliente",
   "source": "freela",
   "amount": 1000

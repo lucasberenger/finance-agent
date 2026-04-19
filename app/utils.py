@@ -1,4 +1,6 @@
 # Custom util functions
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 def format_label(text: str) -> str:
     if not text:
@@ -24,3 +26,6 @@ def format_message(action: str, amount: float | int | None, category: str | None
             return "⚠️ Não consegui entender. Tente novamente."
         case _:
             return "✅ Ok"
+        
+def get_current_date() -> str:
+    return datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%d/%m/%Y")
