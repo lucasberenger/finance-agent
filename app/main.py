@@ -27,6 +27,9 @@ async def telegram_webhook(request: Request):
     data = await request.json()
 
     message = data.get("message", {})
+    if not message:
+        return {"ok": True}
+    
     chat_id = message.get("chat", {}).get("id")
     text = message.get("text")
 
@@ -41,6 +44,7 @@ async def telegram_webhook(request: Request):
         amount = result.get("amount"), 
         category = result.get("category")
     )
+    
     try:
         async with httpx.AsyncClient() as client:
             await client.post(
