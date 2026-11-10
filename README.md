@@ -96,6 +96,42 @@ resposta salva. Uma confirmação pode aparecer novamente no chat em uma reentre
 o envio ao Telegram não oferece uma transação conjunta com o armazenamento.
 Não apague o SQLite para tentar resolver falhas: ele também protege operações de desfazer.
 
+## Logs operacionais
+
+A aplicação escreve um objeto JSON por linha em stdout. Use `LOG_LEVEL=INFO`
+(padrão) para acompanhar a operação; `WARNING` ou `ERROR` reduzem o volume.
+Valores aceitos: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+Não são criados arquivos de log pela aplicação.
+
+Cada mensagem autorizada recebe contexto com seu `update_id`, compartilhado entre
+as etapas e a thread de processamento. Os eventos mostram:
+
+- Recebimento e conclusão do webhook; rejeições e mensagens ignoradas têm um motivo.
+- Ação selecionada, resposta reaproveitada (`update_replayed`) ou operação retomada (`update_resumed`).
+- `stage_completed` / `stage_failed` com `stage` e `duration_ms` para interpretação,
+  Groq, consultas/gravações no Sheets, diário SQLite, execução e envio ao Telegram.
+- Falhas com `error_type` e, quando disponível, código HTTP; saída inválida da IA
+  gera `llm_output_invalid` no nível WARNING e pede esclarecimento ao usuário.
+- Inicialização e encerramento do processo.
+
+Exemplo ilustrativo:
+
+```json
+{"timestamp":"2026-11-09T15:00:00+00:00","level":"ERROR","event":"stage_failed","update_id":"42","stage":"groq_request","duration_ms":210.5,"error_type":"RateLimitError","status_code":429}
+```
+
+Procure o `update_id` para reunir os eventos da mesma mensagem. Uma falha pode
+aparecer tanto na etapa específica quanto nas etapas que a envolvem; isso não
+representa várias tentativas. Durações externas incluem espera nas etapas internas.
+Os logs de rejeição não incluem identificadores fornecidos por usuários não autorizados.
+
+Texto das mensagens, respostas, valores, categorias, credenciais, IDs de usuário e
+URLs das APIs não são registrados. O formatador usa campos permitidos e omite
+mensagens de exceção e tracebacks. Logs dos clientes HTTP e SDKs são silenciados
+para evitar exposição de tokens em URLs ou de payloads, inclusive com LOG_LEVEL=DEBUG.
+Os logs próprios do Uvicorn (acessos e ciclo de vida) continuam com seu formato padrão.
+A configuração de logs é aplicada no ciclo de inicialização do FastAPI.
+
 ## Testes
 
 ```bash
