@@ -22,21 +22,30 @@ parcelas ou recorrências. O resultado mensal não é o saldo disponível em con
 
 ```bash
 uv sync
-cp .env.example .env
+test -f .env || cp .env.example .env
 ```
 
-Preencha `.env`:
+Se você já tem um `.env`, preserve-o e adicione apenas as variáveis que faltarem.
+Preencha os valores abaixo; não versione o arquivo nem as chaves baixadas:
 
 | Variável | Uso |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Token do bot |
 | `TELEGRAM_OWNER_ID` | Seu ID numérico de usuário no Telegram |
-| `TELEGRAM_WEBHOOK_SECRET` | Segredo aleatório para autenticar o webhook |
+| `TELEGRAM_WEBHOOK_SECRET` | Segredo exigido pelo servidor para autenticar o encaminhamento local |
 | `GROQ_API_KEY` | Credencial da Groq |
-| `GROQ_MODEL` | Modelo compatível com respostas JSON; opcional |
+| `GROQ_MODEL` | ID de um modelo disponível na sua conta Groq e compatível com respostas JSON |
 | `GOOGLE_CLOUD_CREDENTIALS` | JSON da conta de serviço Google, em uma linha |
 | `SHEET_ID` | ID da planilha, extraído da URL |
 | `STATE_DB_PATH` | Caminho para SQLite em armazenamento persistente |
+| `LOG_LEVEL` | Nível dos logs operacionais; padrão `INFO` |
+
+O modelo do `.env.example` também é o padrão do código, mas pode não estar
+mais disponível na sua conta. Defina `GROQ_MODEL` explicitamente para o modelo que
+você validou; erros de disponibilidade aparecem nos logs da etapa `groq_request`.
+
+Para gerar `TELEGRAM_WEBHOOK_SECRET`, execute `openssl rand -hex 32` e salve o
+resultado no `.env`. Use um valor diferente do token do bot.
 
 Compartilhe a planilha com o e-mail da conta de serviço. São necessárias duas abas,
 com cabeçalho na primeira linha e estas colunas, nesta ordem:
@@ -63,20 +72,49 @@ Registros com Status `void` ficam fora das consultas; não remova nem reutilize 
 uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 ```
 
-Registre o webhook HTTPS usando `setWebhook` da API do Telegram, enviando:
+Em outro terminal, confira a inicialização:
 
-```json
-{
-  "url": "https://SEU_DOMINIO/telegram/webhook",
-  "secret_token": "MESMO_VALOR_DE_TELEGRAM_WEBHOOK_SECRET",
-  "allowed_updates": ["message"]
-}
+```bash
+curl --fail http://127.0.0.1:8000/health
 ```
 
-A chamada usa `POST https://api.telegram.org/bot<TOKEN>/setWebhook`.
-Somente mensagens privadas enviadas pelo proprietário são aceitas.
-`GET /health` verifica o processo; não testa a disponibilidade das integrações.
-O antigo endpoint `/test`, que gravava dados sem autenticação, foi removido.
+O retorno esperado é `{"ok":true}`. O processo deve emitir o evento
+`application_started` no terminal. Isso confirma a inicialização, mas não valida
+as credenciais nem a disponibilidade das integrações externas.
+
+### Recebimento de mensagens no teste local
+
+O fluxo validado atualmente usa **long polling**: um script auxiliar consulta
+`getUpdates` no Telegram e encaminha as mensagens ao servidor em
+`http://127.0.0.1:8000`. O servidor interpreta a mensagem, executa a ação e envia a
+resposta pela API do Telegram.
+
+O auxiliar temporário está em `app/polling.py`. Com o servidor já iniciado,
+execute em outro terminal, na raiz do projeto:
+
+```bash
+uv run python -m app.polling
+```
+
+Para outra porta local, use `--server-url http://127.0.0.1:8001`.
+O módulo carrega o `.env` do projeto, usa os logs operacionais e verifica a saúde
+do servidor antes de começar. Iniciar apenas o Uvicorn não inicia o recebimento
+de mensagens do bot. Os dois processos precisam permanecer rodando; encerre o
+polling com `Ctrl+C`. Execute apenas um receptor de mensagens por bot.
+
+Em falhas transitórias, ele aguarda cinco segundos antes de tentar novamente,
+sem confirmar a mensagem que falhou. Erros de autenticação ou conflito de receptor
+interrompem a execução. Uma configuração de recebimento externo já ativa também
+impede a inicialização; o auxiliar não altera essa configuração automaticamente.
+Este polling é temporário e será substituído pelo webhook público no futuro.
+
+Com os dois processos ativos, envie `/ajuda`, registre um gasto de teste e consulte
+`/ultimos` e `/resumo`. Use `/desfazer` para cancelar o gasto; ele permanecerá na
+planilha com status `void` e deixará de compor os totais. Esse teste usa a planilha
+real configurada no `.env`. Somente mensagens privadas do proprietário são aceitas.
+
+Reinicie o servidor sempre que alterar o `.env` ou o código; o comando acima não
+ativa recarga automática.
 
 ## Persistência e falhas
 
@@ -86,15 +124,73 @@ chamadas síncronas rodam fora do event loop. Não há fila distribuída nesta v
 O SQLite guarda a interpretação, o alvo de desfazer e a resposta por `update_id`
 antes/depois da execução. A planilha recebe o mesmo ID, conferido antes de inserir.
 Isso permite retomar reentregas sem repetir a mutação, inclusive após uma falha de
-resposta da planilha. Guarde o arquivo SQLite em disco persistente (no Render,
-configure um disco e aponte `STATE_DB_PATH` para ele) e inclua-o no backup.
+resposta da planilha. Guarde o arquivo SQLite em um local preservado entre
+reinícios e inclua-o no backup.
 Não compartilhe uma planilha entre bots/instâncias independentes.
 
-Se houver falha de integração, o webhook retorna 503 para permitir reentrega pelo
-Telegram. Se o envio da resposta falhar após o lançamento, a reentrega reutiliza a
+Se houver falha de integração, o servidor retorna 503. No teste local, o auxiliar
+não avança a confirmação da mensagem e tenta encaminhá-la novamente. Se o envio da resposta falhar após o lançamento, a reentrega reutiliza a
 resposta salva. Uma confirmação pode aparecer novamente no chat em uma reentrega;
 o envio ao Telegram não oferece uma transação conjunta com o armazenamento.
 Não apague o SQLite para tentar resolver falhas: ele também protege operações de desfazer.
+
+## Logs operacionais
+
+A aplicação escreve um objeto JSON por linha em stdout. Use `LOG_LEVEL=INFO`
+(padrão) para acompanhar a operação; `WARNING` ou `ERROR` reduzem o volume.
+Valores aceitos: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+Não são criados arquivos de log pela aplicação. Configure o nível no `.env`:
+
+```dotenv
+LOG_LEVEL=INFO
+```
+
+Reinicie o servidor para aplicar a mudança. `DEBUG` usa o mesmo conjunto de
+eventos de `INFO` nesta versão; não habilita payloads nem logs dos SDKs.
+
+Cada mensagem autorizada recebe contexto com seu `update_id`, compartilhado entre
+as etapas e a thread de processamento. Os eventos mostram:
+
+- Recebimento e conclusão das requisições; rejeições e mensagens ignoradas têm um motivo.
+- Ação selecionada, resposta reaproveitada (`update_replayed`) ou operação retomada (`update_resumed`).
+- `stage_completed` / `stage_failed` com `stage` e `duration_ms` para interpretação,
+  Groq, consultas/gravações no Sheets, diário SQLite, execução e envio ao Telegram.
+- Falhas com `error_type` e, quando disponível, código HTTP; saída inválida da IA
+  gera `llm_output_invalid` no nível WARNING e pede esclarecimento ao usuário.
+- Inicialização e encerramento do processo.
+
+O evento `action_selected` identifica a ação escolhida. As durações ficam nos
+eventos `stage_completed` e `stage_failed`. A interpretação de comandos como
+`/resumo` é local e não chama a Groq. Reentregas com resposta salva emitem
+`update_replayed`, sem executar a ação novamente.
+
+As principais etapas para diagnóstico são:
+
+| `stage` | O que verificar |
+|---|---|
+| `startup` | Variáveis obrigatórias e acesso ao arquivo SQLite |
+| `groq_request` | Autenticação, modelo, limite de requisições ou conexão com a Groq |
+| `sheets_connect`, `sheets_read`, `sheets_add`, `sheets_undo` | Credenciais Google, compartilhamento, abas e dados da planilha |
+| `journal_read`, `journal_save_action`, `journal_save_response` | Leitura e gravação no diário SQLite |
+| `telegram_send` | Envio da resposta ao Telegram |
+
+Exemplo ilustrativo:
+
+```json
+{"timestamp":"2026-11-09T15:00:00+00:00","level":"ERROR","event":"stage_failed","update_id":"42","stage":"groq_request","duration_ms":210.5,"error_type":"RateLimitError","status_code":429}
+```
+
+Procure o `update_id` para reunir os eventos da mesma mensagem. Uma falha pode
+aparecer tanto na etapa específica quanto nas etapas que a envolvem; isso não
+representa várias tentativas. Durações externas incluem espera nas etapas internas.
+Os logs de rejeição não incluem identificadores fornecidos por usuários não autorizados.
+
+Texto das mensagens, respostas, valores, categorias, credenciais, IDs de usuário e
+URLs das APIs não são registrados. O formatador usa campos permitidos e omite
+mensagens de exceção e tracebacks. Logs dos clientes HTTP e SDKs são silenciados
+para evitar exposição de tokens em URLs ou de payloads, inclusive com LOG_LEVEL=DEBUG.
+Os logs próprios do Uvicorn (acessos e ciclo de vida) continuam com seu formato padrão.
+A configuração de logs é aplicada no ciclo de inicialização do FastAPI.
 
 ## Testes
 
@@ -105,10 +201,17 @@ uv run python -m unittest discover -s tests -v
 Os testes usam repositório e chamadas HTTP simulados, SQLite temporário e nenhuma
 credencial real. Cobrem validação, precisão monetária, períodos, compatibilidade
 com linhas antigas, controle de acesso e retomada de operações após falhas.
+Também verificam a correlação dos logs entre tarefas e threads, os eventos de
+falha, a configuração sem handlers duplicados e a ausência de dados sensíveis
+nos eventos emitidos. Os testes do polling cobrem encaminhamento, confirmação
+após sucesso, repetição após falha e restrição ao proprietário. Não é necessário
+preencher o `.env` para executar a suíte.
 
 ## Arquitetura
 
-`Telegram → webhook autenticado → interpretação validada → ações → Google Sheets`
+`Telegram → app.polling → FastAPI local → interpretação validada → ações → Google Sheets`
+
+O servidor envia a confirmação de volta ao Telegram pela API de mensagens.
 
 SQLite mantém o diário de processamento. O cálculo dos relatórios usa `Decimal`;
 as consultas leem as abas para agregar os registros em Python.

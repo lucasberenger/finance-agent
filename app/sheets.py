@@ -5,11 +5,14 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from functools import lru_cache
 
+from app.observability import event, timed
+
 import gspread
 from google.oauth2.service_account import Credentials
 
 
 @lru_cache
+@timed('sheets_connect')
 def worksheets():
     credentials = Credentials.from_service_account_info(
         json.loads(os.environ['GOOGLE_CLOUD_CREDENTIALS']),
@@ -26,6 +29,7 @@ def parse_amount(value):
 
 
 class SheetsRepository:
+    @timed('sheets_read')
     def entries(self, owner):
         records = []
         for kind, sheet in worksheets().items():
@@ -51,11 +55,13 @@ class SheetsRepository:
                                     row=row_number, base=base))
         return records
 
+    @timed('sheets_add')
     def add(self, action, owner, entry_id):
         sheet = worksheets()[action.action]
         base = 5 if action.action == 'add_expense' else 4
         # Check even void rows: retries must never recreate an undone entry.
         if any(len(row) > base and row[base] == entry_id for row in sheet.get_all_values()[1:]):
+            event('sheet_entry_already_exists')
             return
         values = [action.date.strftime('%d/%m/%Y'), action.description,
                   action.category if action.action == 'add_expense' else action.source,
@@ -66,6 +72,7 @@ class SheetsRepository:
         values.extend([entry_id, str(owner), datetime.now(timezone.utc).isoformat(), 'active'])
         sheet.append_row(values, value_input_option='RAW')
 
+    @timed('sheets_undo')
     def undo(self, owner, operation_id, target=None):
         # The target is persisted before mutation so retries cannot undo another row.
         records = self.entries(owner)

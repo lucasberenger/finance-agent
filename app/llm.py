@@ -1,9 +1,11 @@
 import json
+import logging
 import os
 
 from groq import Groq
 
 from app.models import Action
+from app.observability import event, stage
 from app.utils import today
 
 PROMPT = '''Você interpreta mensagens de um assistente financeiro pessoal em português.
@@ -37,13 +39,16 @@ def interpret_user_input(text: str) -> Action:
         return Action(action='list')
     if command in ('/start', '/help', '/ajuda'):
         return Action(action='clarify', question='Envie um gasto ou receita, por exemplo: “Gastei 30 no almoço ontem via pix”. Use /resumo, /ultimos ou /desfazer. Também entendo consultas por mês.')
-    response = Groq(api_key=os.environ['GROQ_API_KEY']).chat.completions.create(
-        model=os.getenv('GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct'),
-        messages=[{'role': 'system', 'content': PROMPT + f'\nHoje: {today().isoformat()} (America/Sao_Paulo).'},
-                  {'role': 'user', 'content': text}],
-        response_format={'type': 'json_object'}, temperature=0,
-    )
+    model = os.getenv('GROQ_MODEL', 'meta-llama/llama-4-scout-17b-16e-instruct')
+    with stage('groq_request', model=model):
+        response = Groq(api_key=os.environ['GROQ_API_KEY']).chat.completions.create(
+            model=model,
+            messages=[{'role': 'system', 'content': PROMPT + f'\nHoje: {today().isoformat()} (America/Sao_Paulo).'},
+                      {'role': 'user', 'content': text}],
+            response_format={'type': 'json_object'}, temperature=0,
+        )
     try:
         return Action.model_validate(json.loads(response.choices[0].message.content))
     except (ValueError, TypeError):
+        event('llm_output_invalid', level=logging.WARNING)
         return Action(action='clarify', question='Não consegui identificar todos os dados. Informe uma ação, descrição, valor e, se necessário, a data.')
