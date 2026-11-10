@@ -14,3 +14,9 @@ wheels/
 
 # Gcp keys
 credentials.json
+# Local processing journal
+data/
+*.sqlite3
+*.sqlite3-journal
+*.sqlite3-wal
+*.sqlite3-shm
