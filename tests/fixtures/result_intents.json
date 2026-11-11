@@ -1,0 +1,8 @@
+[
+  {"text": "quanto ainda tenho no mês?", "action": "query", "metric": "result", "period": "current_month"},
+  {"text": "quanto me resta?", "action": "query", "metric": "result", "period": "current_month"},
+  {"text": "quanto sobrou ontem?", "action": "query", "metric": "result", "period": "yesterday"},
+  {"text": "quanto tenho disponível este mês?", "action": "query", "metric": "result", "period": "current_month"},
+  {"text": "qual o saldo da minha conta bancária?", "action": "clarify"},
+  {"text": "quanto tenho na conta do Nubank?", "action": "clarify"}
+]

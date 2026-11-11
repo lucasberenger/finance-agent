@@ -1,7 +1,5 @@
-from collections import defaultdict
-from decimal import Decimal
-
 from app.utils import currency, today
+from app.queries import answer_query, summary
 
 
 def handle_action(action, repo, owner, operation_id, target=None):
@@ -18,19 +16,12 @@ def handle_action(action, repo, owner, operation_id, target=None):
         repo.undo(owner, operation_id, target)
         return 'Último lançamento desfeito.' if target else 'Nenhum lançamento novo disponível para desfazer.'
     records = repo.entries(owner)
+    if action.action == 'query':
+        return answer_query(action, records)
     if action.action == 'summary':
         month = action.month or today()
         records = [r for r in records if (r['date'].year, r['date'].month) == (month.year, month.month)]
-        income = sum((r['amount'] for r in records if r['kind'] == 'add_income'), Decimal(0))
-        expenses = sum((r['amount'] for r in records if r['kind'] == 'add_expense'), Decimal(0))
-        categories = defaultdict(Decimal)
-        for row in records:
-            if row['kind'] == 'add_expense':
-                categories[row['category']] += row['amount']
-        lines = [f'Resumo de {month:%m/%Y}', f'Receitas: {currency(income)}',
-                 f'Despesas: {currency(expenses)}', f'Resultado do período: {currency(income - expenses)}']
-        lines.extend(f'{key}: {currency(value)}' for key, value in sorted(categories.items(), key=lambda item: -item[1]))
-        return '\n'.join(lines)
+        return summary(records, f'Resumo de {month:%m/%Y}')
     if action.month:
         records = [r for r in records if (r['date'].year, r['date'].month) == (action.month.year, action.month.month)]
     records.sort(key=lambda r: (r['date'], r['created'], r['row']), reverse=True)
