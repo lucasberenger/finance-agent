@@ -8,15 +8,38 @@ Python 3.12+, FastAPI, Groq e Google Sheets.
 - Lançamentos com descrição, valor, categoria/origem e pagamento.
 - Datas relativas ou explícitas: “gastei 30 no almoço ontem via pix”.
 - `/resumo`: receitas, despesas, resultado e despesas por categoria no mês atual.
-- “Resumo de outubro de 2026”: consulta outro mês.
+- Perguntas específicas: “quanto gastei?”, “quanto recebi?” e “qual o resultado do mês?”.
+- Períodos: hoje, ontem, mês atual ou outro mês, como “quanto gastei em outubro de 2026?”.
+- “Resumo de outubro de 2026”: consulta completa de outro mês.
 - `/ultimos`: cinco lançamentos mais recentes por data financeira; “últimos 10 lançamentos” permite até 20.
 - `/desfazer`: cancela o último lançamento novo, pela ordem de registro, preservando a linha na planilha.
 - `/ajuda`: exemplos e comandos.
 
+Consultas sem período usam o mês atual e sempre informam o período na resposta.
+“Quanto gastei?” retorna somente as despesas; “quanto recebi?” retorna somente as
+receitas. Perguntas como “quanto ainda tenho no mês?”, “quanto me resta?” e
+“quanto sobrou?” retornam o resultado: receitas menos despesas registradas.
+A resposta explicita essa base; ela não representa saldo bancário nem inclui
+valores de meses anteriores. Pedidos explícitos de saldo da conta bancária geram
+uma explicação da limitação, sem executar esse cálculo como se fosse saldo. `/resumo` continua mostrando a
+visão completa mensal. A IA identifica o pedido, mas os filtros, cálculos e frases
+de resposta são executados pelo código, sem uma segunda chamada ao modelo.
+
+Exemplo com receita de R$ 3.250,00 e uma despesa ativa de R$ 12,50 no mês:
+
+```text
+Você: Quanto gastei?
+Bot: Você gastou R$ 12,50 em 11/2026.
+
+Você: Quanto recebi?
+Bot: Você recebeu R$ 3.250,00 em 11/2026.
+```
+
 Campos opcionais ausentes ficam como “Não informado”. Mensagens incompletas geram
 um pedido de esclarecimento: reenvie a frase completa, pois não há memória de conversa.
 Não há ainda comparação entre períodos, filtros por categoria, orçamento, áudio,
-parcelas ou recorrências. O resultado mensal não é o saldo disponível em contas.
+parcelas ou recorrências. Consultas por semana ou intervalos arbitrários ainda não
+são suportadas. O resultado mensal não é o saldo disponível em contas.
 
 ## Configuração
 
@@ -201,11 +224,27 @@ uv run python -m unittest discover -s tests -v
 Os testes usam repositório e chamadas HTTP simulados, SQLite temporário e nenhuma
 credencial real. Cobrem validação, precisão monetária, períodos, compatibilidade
 com linhas antigas, controle de acesso e retomada de operações após falhas.
+Consultas específicas têm testes de métrica, datas, virada de mês/ano, ano bissexto,
+períodos sem lançamentos e garantia de não gravar registros financeiros.
 Também verificam a correlação dos logs entre tarefas e threads, os eventos de
 falha, a configuração sem handlers duplicados e a ausência de dados sensíveis
 nos eventos emitidos. Os testes do polling cobrem encaminhamento, confirmação
 após sucesso, repetição após falha e restrição ao proprietário. Não é necessário
 preencher o `.env` para executar a suíte.
+
+### Avaliação opcional da interpretação real
+
+Os casos em `tests/fixtures/result_intents.json` verificam a distinção entre
+“quanto ainda tenho no mês?” (resultado dos registros) e uma consulta explícita
+sobre saldo bancário. Para executá-los contra o modelo configurado na Groq:
+
+```bash
+RUN_LIVE_EVALS=1 uv run python -m unittest discover -s tests -p test_result_intents_live.py -v
+```
+
+Essa avaliação carrega o `.env`, consome a API da Groq e está desativada na suíte
+normal. Não acessa a planilha nem envia mensagens ao Telegram. Limites de uso ou
+indisponibilidade da API podem causar falhas; repita quando a conta estiver disponível.
 
 ## Arquitetura
 
