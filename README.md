@@ -35,6 +35,23 @@ Você: Quanto recebi?
 Bot: Você recebeu R$ 3.250,00 em 11/2026.
 ```
 
+Valores numéricos são convertidos no código a partir do trecho original extraído
+pela IA, sem depender da conversão numérica do modelo:
+
+| Valor enviado | Valor registrado |
+|---|---|
+| `3.250` | R$ 3.250,00 |
+| `12,50` ou `12,5` | R$ 12,50 |
+| `R$ 3.250,90` | R$ 3.250,90 |
+| `3250` | R$ 3.250,00 |
+| `12.50` | R$ 12,50 |
+
+Ponto com grupos de três dígitos é separador de milhares. Valores malformados,
+negativos, zero, mais de duas casas decimais ou sem valor numérico explícito geram
+pedido de esclarecimento. Valores por extenso e abreviações como `3k` ainda não são
+suportados. Registros antigos não são reescritos; a leitura de valores textuais na
+planilha usa a mesma convenção de separadores.
+
 Campos opcionais ausentes ficam como “Não informado”. Mensagens incompletas geram
 um pedido de esclarecimento: reenvie a frase completa, pois não há memória de conversa.
 Não há ainda comparação entre períodos, filtros por categoria, orçamento, áudio,
@@ -245,6 +262,15 @@ RUN_LIVE_EVALS=1 uv run python -m unittest discover -s tests -p test_result_inte
 Essa avaliação carrega o `.env`, consome a API da Groq e está desativada na suíte
 normal. Não acessa a planilha nem envia mensagens ao Telegram. Limites de uso ou
 indisponibilidade da API podem causar falhas; repita quando a conta estiver disponível.
+
+Para avaliar os formatos brasileiros com o modelo real, sem gravar lançamentos:
+
+```bash
+RUN_LIVE_EVALS=1 uv run python -m unittest discover -s tests -p test_brazilian_amounts_live.py -v
+```
+
+Os exemplos ficam em `tests/fixtures/brazilian_amounts.json`. A avaliação exige
+credenciais da Groq e está sujeita aos limites de requisições da conta.
 
 ## Arquitetura
 

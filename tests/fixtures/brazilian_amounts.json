@@ -1,0 +1,8 @@
+[
+  {"text":"Recebi 3.250 de salário", "action":"add_income", "amount":"3250.00"},
+  {"text":"Gastei 12,50 no almoço", "action":"add_expense", "amount":"12.50"},
+  {"text":"Paguei R$ 3.250,90 de aluguel", "action":"add_expense", "amount":"3250.90"},
+  {"text":"Recebi 3250 reais de salário", "action":"add_income", "amount":"3250.00"},
+  {"text":"Gastei 0,50 com bala", "action":"add_expense", "amount":"0.50"},
+  {"text":"Gastei no mercado", "action":"clarify"}
+]
