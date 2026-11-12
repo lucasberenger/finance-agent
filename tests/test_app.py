@@ -64,7 +64,7 @@ class FinanceTests(unittest.TestCase):
         response.choices = [Mock()]
         with patch('app.llm.Groq') as groq, patch.dict(os.environ, {'GROQ_API_KEY': 'test'}), patch('app.llm.today', return_value=date(2026, 11, 8)):
             groq.return_value.chat.completions.create.return_value = response
-            response.choices[0].message.content = '{"action":"add_expense","description":"almoço","amount":30,"date":"2026-11-07"}'
+            response.choices[0].message.content = '{"action":"add_expense","description":"almoço","amount_text":"30","date":"2026-11-07"}'
             action = interpret_user_input('Gastei 30 no almoço ontem')
             self.assertEqual(action.date, date(2026, 11, 7))
             messages = groq.return_value.chat.completions.create.call_args.kwargs['messages']

@@ -2,9 +2,10 @@
 import json
 import os
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import InvalidOperation
 from functools import lru_cache
 
+from app.money import parse_amount
 from app.observability import event, timed
 
 import gspread
@@ -19,13 +20,6 @@ def worksheets():
         scopes=['https://www.googleapis.com/auth/spreadsheets'])
     book = gspread.authorize(credentials).open_by_key(os.environ['SHEET_ID'])
     return {'add_income': book.worksheet('Entrada'), 'add_expense': book.worksheet('Saída')}
-
-
-def parse_amount(value):
-    text = str(value).replace('R$', '').strip()
-    if ',' in text:
-        text = text.replace('.', '').replace(',', '.')
-    return Decimal(text)
 
 
 class SheetsRepository:
